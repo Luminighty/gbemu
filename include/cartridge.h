@@ -48,7 +48,7 @@ typedef struct {
 	bool is_load_success;
 	uint8_t *content;
 	size_t size;
-	char *title;
+	char title[17];
 	uint16_t licensee;
 	bool is_color;
 	bool is_super_gb;

@@ -4,3 +4,7 @@ build/
 
 compile_commands.json
 
+tests/bin/
+tests/build/
+assets/*.gb
+assets/*.gbc

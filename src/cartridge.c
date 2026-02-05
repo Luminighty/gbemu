@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 
 static inline uint8_t* load_file(char *filename, size_t* size);
@@ -16,7 +17,7 @@ Cartridge cartridge_load(char* filename) {
 		return (Cartridge){.is_load_success = false };
 	}
 	// NOTE: Titles with 16 chars will break this due to the missing \0. For now it should be fine though
-	cartridge.title = (char*)&cartridge.content[0x134];
+	strlcpy(cartridge.title, (char*)&cartridge.content[0x134], sizeof(cartridge.title));
 	cartridge.is_color = cartridge.content[0x143];
 	cartridge.licensee = cartridge.content[0x144] << 8 | cartridge.content[0x145];
 	cartridge.is_super_gb = cartridge.content[0x0146] != 0;
@@ -35,7 +36,7 @@ Cartridge cartridge_load(char* filename) {
 void cartridge_free(Cartridge *cartridge) {
 	free(cartridge->content);
 	cartridge->content = NULL;
-	cartridge->title = NULL;
+	cartridge->title[0] = '\0';
 	cartridge->size = 0;
 }
 

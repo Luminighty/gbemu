@@ -1,0 +1,53 @@
+#!/bin/python3
+
+import os
+import subprocess
+
+subprocess.run(['make'], check=True, capture_output=True)
+
+SRC_OBJS_FOLDER = "./build"
+TESTS_FOLDER = "./tests"
+INCLUDES = "./include"
+
+SRC_OBJS = [os.path.join(SRC_OBJS_FOLDER, f) for f in os.listdir(SRC_OBJS_FOLDER) if f != "main.o" ]
+
+def execute_test(directory, c_file):
+    c_file_path = os.path.join(directory, c_file)
+
+    o_file = c_file.replace('.c', '.o')
+    o_file = os.path.join(directory, "build", o_file)
+    subprocess.run(['gcc', '-c', c_file_path, '-I', INCLUDES, '-o', o_file], check=True)
+
+    executable = c_file.replace('.c', '.out')
+    executable = os.path.join(directory, "bin", executable)
+    subprocess.run(['gcc', o_file, *SRC_OBJS, '-o', executable], check=True)
+
+    result = subprocess.run([executable], capture_output=True, text=True)
+    if result.returncode == 0:
+        print(f"\033[1m\033[92m[PASS]\033[0m {c_file} passed...")
+    else:
+        print(f"\033[1m\033[91m[FAIL]\033[0m {c_file} failed...")
+        print(f"{result.stderr}")
+
+    return result.returncode == 0
+
+
+def run_all_tests(directory):
+    os.makedirs(os.path.join(directory, "build"), exist_ok=True)
+    os.makedirs(os.path.join(directory, "bin"), exist_ok=True)
+    c_files = [f for f in os.listdir(directory) if f.endswith('.c')]
+    if not c_files:
+        print(f"No tests found in {directory}.")
+        return
+    all_passed = True
+    for c_file in c_files:
+        try:
+            result = execute_test(directory, c_file)
+            all_passed = all_passed and result
+        except subprocess.CalledProcessError as e:
+            print(f"An error occurred during compilation/linking: {e}")
+    if not all_passed:
+        sys.exit(1)
+
+if __name__ == "__main__":
+    run_all_tests(TESTS_FOLDER)

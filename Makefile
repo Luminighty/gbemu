@@ -39,3 +39,7 @@ $(TARGET): $(OBJS)
 
 clean:
 	rm -rf build bin
+	rm -rf ./tests/build ./tests/bin
+
+test:
+	@python3 ./tests/test_runner.py
