@@ -1,6 +1,7 @@
 #ifndef CPU_H
 #define CPU_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 
@@ -18,10 +19,18 @@ typedef struct {
 
 	uint8_t opcode_length;
 	uint8_t cycles;
+
+	bool ime;
+	bool ime_scheduled;
+
+	bool is_stopped;
+	bool is_halted;
 } CPU;
 
 
 CPU cpu_create();
 
+struct emulator;
+int cpu_step(struct emulator *emu);
 
 #endif // CPU_H

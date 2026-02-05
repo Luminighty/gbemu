@@ -15,10 +15,17 @@
 #define FLAG_N ((emu->cpu.f >> 6) & 1)
 #define FLAG_Z ((emu->cpu.f >> 7) & 1)
 
+static inline void prefix_opcodes(Emulator* emu);
+
 void opcode_execute(Emulator* emu, uint8_t opcode) {
 	switch (opcode) {
-	// NOOP
-	case 0x00: LEN(1); CYCLE(4); break;
+	case 0x00: LEN(1); CYCLE(4); break; // NOP
+	case 0x10: LEN(2); CYCLE(4); emu->cpu.is_stopped = true; break; // STOP
+	// TODO: HALT BUG
+	case 0x76: LEN(1); CYCLE(4); emu->cpu.is_halted = true; break; // HALT
+	case 0xF3: LEN(1); CYCLE(4); emu->cpu.ime = false; break; // DI
+	case 0xFB: LEN(1); CYCLE(4); emu->cpu.ime_scheduled = true; break; // EI
+	case 0xCB: prefix_opcodes(emu); break;
 
 	// ===========================
 	// ========== STACK ==========
@@ -59,22 +66,55 @@ void opcode_execute(Emulator* emu, uint8_t opcode) {
 		LEN(3); CYCLE(20);
 		memory_write_16(emu, memory_read_16(emu, emu->cpu.pc + 1), emu->cpu.sp);
 		break;
-	// TODO: Random LD cases
-	case 0xF8: break; // LD HL, SP+r8
-	case 0xF9: break; // LD SP, HL
+	case 0xF8: { // LD HL, SP+r8
+		LEN(2); CYCLE(12);
+		int8_t offset = (int8_t)memory_read(emu, emu->cpu.pc + 1);
+		uint8_t uoffset = (uint8_t)offset;
+		uint8_t sp_low = emu->cpu.sp & 0xFF;
+		bool hc = (sp_low & 0xF) + (uoffset & 0xF) > 0xF;
+		bool c = (sp_low + uoffset) > 0xFF;
+		SET_FLAG(0, 0, hc, c);
+		emu->cpu.hl = emu->cpu.sp + offset;
+	} break;
+	case 0xF9: // LD SP, HL
+		LEN(1); CYCLE(8);
+		emu->cpu.sp = emu->cpu.hl;
+		break;
 	
 	// ========================
 	// ========== LD ==========
 	// ========================
 
-	// TODO: Random LD cases
-	case 0xE0: break; // LDH (a8), A
-	case 0xF0: break; // LDH A, (a8)
-	case 0xE2: break; // LD (C), A
-	case 0xF2: break; // LD A, (C)
-	case 0xEA: break; // LD (a16), A
-	case 0xFA: break; // LD A, (a16)
-
+	case 0xE0: { // LDH (a8), A
+		LEN(2); CYCLE(12);
+		uint16_t address = 0xFF00 + (uint16_t)memory_read(emu, emu->cpu.pc + 1);
+		memory_write(emu, address, emu->cpu.a);
+	} break;
+	case 0xF0: { // LDH A, (a8)
+		LEN(2); CYCLE(12);
+		uint16_t address = 0xFF00 + (uint16_t)memory_read(emu, emu->cpu.pc + 1);
+		emu->cpu.a = memory_read(emu, address);
+	} break;
+	case 0xE2: { // LD (C), A
+		LEN(1); CYCLE(8);
+		uint16_t address = 0xFF00 + emu->cpu.c;
+		memory_write(emu, address, emu->cpu.a);
+	} break;
+	case 0xF2: { // LD A, (C)
+		LEN(1); CYCLE(8);
+		uint16_t address = 0xFF00 + emu->cpu.c;
+		emu->cpu.a = memory_read(emu, address);
+	} break;
+	case 0xEA: { // LD (a16), A
+		LEN(3); CYCLE(16);
+		uint16_t address = memory_read_16(emu, emu->cpu.pc + 1);
+		memory_write(emu, address, emu->cpu.a);
+	} break;
+	case 0xFA: { // LD A, (a16)
+		LEN(3); CYCLE(16);
+		uint16_t address = memory_read_16(emu, emu->cpu.pc + 1);
+		emu->cpu.a = memory_read(emu, address);
+	} break;
 	case 0x02: // LD (BC), A
 		LEN(1); CYCLE(8);
 		memory_write(emu, emu->cpu.bc, emu->cpu.a);
@@ -203,7 +243,6 @@ void opcode_execute(Emulator* emu, uint8_t opcode) {
 	case 0x73: LD_HL_r(e);
 	case 0x74: LD_HL_r(h);
 	case 0x75: LD_HL_r(l);
-	// case 0x76: HALT
 	case 0x77: LD_HL_r(a);
 
 	case 0x78: LD(a, b);
@@ -402,14 +441,33 @@ void opcode_execute(Emulator* emu, uint8_t opcode) {
 		LEN(2); CYCLE(8); exec_cp(memory_read(emu, emu->cpu.pc + 1));
 	} break;
 	
-	// TODO: DAA
-	case 0x27: break;
-	// TODO: SCF
-	case 0x37: break;
-	// TODO: CPL
-	case 0x2F: break;
-	// TODO: CCF
-	case 0x3F: break;
+	case 0x27: { // DAA
+		LEN(1); CYCLE(4);
+		bool carry = FLAG_C;
+		uint8_t a = emu->cpu.a;
+		if (FLAG_N) {
+			if (FLAG_C) { a -= 0x60; }
+			if (FLAG_H) { a -= 0x06; }
+		} else {
+			if (FLAG_C || a > 0x99) { a += 0x60; carry = true; }
+			if (FLAG_H || (a & 0x0F) > 0x09) { a += 0x06; }
+		}
+		emu->cpu.a = a;
+		SET_FLAG(emu->cpu.a == 0, FLAG_N, 0, carry);
+	} break;
+	case 0x37: // SCF
+		LEN(1); CYCLE(4);
+		SET_FLAG(FLAG_Z, 0, 0, 1);
+		break;
+	case 0x2F: // CPL
+		LEN(1); CYCLE(4); 
+		emu->cpu.a ^= 0xFF; 
+		SET_FLAG(FLAG_Z, 1, 1, FLAG_C);
+		break;
+	case 0x3F: // CCF
+		LEN(1); CYCLE(4); 
+		SET_FLAG(FLAG_Z, 0, 0, !FLAG_C); 
+		break;
 
 	#define exec_inc(value) \
 		uint8_t rhs = (value); \
@@ -467,7 +525,14 @@ void opcode_execute(Emulator* emu, uint8_t opcode) {
 
 	#define INC16(TARGET) LEN(1); CYCLE(8); emu->cpu.TARGET += 1; break;
 	#define DEC16(TARGET) LEN(1); CYCLE(8); emu->cpu.TARGET -= 1; break;
-
+	#define ADD16(TARGET) { \
+		LEN(1); CYCLE(8); \
+		uint16_t rhs = (emu->cpu.TARGET); \
+		uint32_t result = (uint32_t)emu->cpu.hl + (uint32_t)rhs; \
+		bool hc = ((emu->cpu.hl & 0x0FFF) + (rhs & 0x0FFF)) > 0x0FFF; \
+		SET_FLAG(FLAG_Z, 0, hc, result > 0xFFFF); \
+		emu->cpu.hl = (uint16_t)result; \
+	} break
 
 	case 0x03: INC16(bc);
 	case 0x13: INC16(de);
@@ -478,17 +543,360 @@ void opcode_execute(Emulator* emu, uint8_t opcode) {
 	case 0x2B: DEC16(hl);
 	case 0x3B: DEC16(sp);
 
-	// TODO: ADD16
-	// case 0x09: ADD16(bc);
-	// case 0x19: ADD16(de);
-	// case 0x29: ADD16(hl);
-	// case 0x39: ADD16(sp);
+	case 0x09: ADD16(bc);
+	case 0x19: ADD16(de);
+	case 0x29: ADD16(hl);
+	case 0x39: ADD16(sp);
 
-	// TODO: ADD SP, r8
-	// case 0xE8: SP, r8;
+	case 0xE8: { // SP, r8;
+		LEN(2); CYCLE(16);
+		int8_t offset = (int8_t)memory_read(emu, emu->cpu.pc + 1);
+		uint8_t uoffset = (uint8_t)offset;
+		uint8_t sp_low = emu->cpu.sp & 0xFF;
+		bool hc = (sp_low & 0xF) + (uoffset & 0xF) > 0xF;
+		bool c = (sp_low + uoffset) > 0xFF;
+		SET_FLAG(0, 0, hc, c);
+		emu->cpu.sp = emu->cpu.sp + offset;
+	} break;
+
+
+	// =============================
+	// ========== CONTROL ==========
+	// =============================
+	
+	#define JR(flag) { \
+		LEN(2); \
+		if (flag) { \
+			CYCLE(12); \
+			int8_t offset = (int8_t)memory_read(emu, emu->cpu.pc + 1); \
+			emu->cpu.pc += offset; \
+		}  else { CYCLE(8); } \
+	} break
+
+	case 0x20: JR(!FLAG_Z); // JR NZ, r8
+	case 0x30: JR(!FLAG_C); // JR NC, r8
+	case 0x18: JR(true); // JR r8
+	case 0x28: JR(FLAG_Z); // JR Z, r8
+	case 0x38: JR(FLAG_C); // JR C, r8
+	
+	#define do_return() \
+		emu->cpu.pc = memory_read_16(emu, emu->cpu.sp); \
+		emu->cpu.sp += 2
+
+	#define RET(flag) { \
+		if (flag) { LEN(0); CYCLE(20); do_return(); } \
+		else      { LEN(1); CYCLE(8); } \
+	} break
+	case 0xC0: RET(!FLAG_Z); // RET NZ
+	case 0xD0: RET(!FLAG_C); // RET NC
+	case 0xC8: RET(FLAG_Z); // RET Z
+	case 0xD8: RET(FLAG_C); // RET C
+	case 0xC9: { LEN(0); CYCLE(8); do_return(); } break; // RET
+	case 0xD9: { // RETI
+		LEN(0); CYCLE(16);
+		do_return();
+		emu->cpu.ime = true;
+	} break;
+	
+	#define do_jump(target) emu->cpu.pc = (target)
+	#define JP(flag) { \
+		if (flag) { CYCLE(16); LEN(0); do_jump(memory_read_16(emu, emu->cpu.pc + 1)); } \
+			else {CYCLE(12); LEN(3); } \
+	} break
+
+	case 0xC2: JP(!FLAG_Z); // JP NZ, a16
+	case 0xD2: JP(!FLAG_C); // JP NC, a16
+	case 0xCA: JP(FLAG_Z); // JP Z, a16
+	case 0xDA: JP(FLAG_C); // JP C, a16
+	case 0xC3: JP(true);
+	case 0xE9: {
+		LEN(0); CYCLE(4); do_jump(emu->cpu.hl);
+	} break; // JP (HL)
+
+	#define do_call() \
+		emu->cpu.sp -= 2; \
+		memory_write_16(emu, emu->cpu.sp, emu->cpu.pc + 3); \
+		emu->cpu.pc = memory_read_16(emu, emu->cpu.pc + 1)
+
+	#define CALL(flag) { \
+		if (flag) { CYCLE(24); LEN(0); do_call(); \
+		} else { CYCLE(12); LEN(3); } \
+	} break
+
+	case 0xC4: CALL(!FLAG_Z); // CALL NZ, a16
+	case 0xD4: CALL(!FLAG_C); // CALL NC, a16
+	case 0xCC: CALL(FLAG_Z); // CALL Z, a16
+	case 0xDC: CALL(FLAG_C); // CALL C, a16
+	case 0xCD: CALL(true); // CALL a16
+	
+	#define RST(target) { \
+		LEN(0); CYCLE(16); \
+		emu->cpu.sp -= 2; \
+		memory_write_16(emu, emu->cpu.sp, emu->cpu.pc + 1); \
+		emu->cpu.pc = target; \
+	} break
+	
+	case 0xC7: RST(0x00); // RST 00H
+	case 0xD7: RST(0x10); // RST 10H
+	case 0xE7: RST(0x20); // RST 20H
+	case 0xF7: RST(0x30); // RST 30H
+	case 0xCF: RST(0x08); // RST 08H
+	case 0xDF: RST(0x18); // RST 18H
+	case 0xEF: RST(0x28); // RST 28H
+	case 0xFF: RST(0x38); // RST 38H
+	
+	// ============================
+	// ========== ROTATE ==========
+	// ============================
+	
+	case 0x07: { // RLCA
+		LEN(1); CYCLE(4);
+		uint8_t bit = emu->cpu.a >> 7;
+		emu->cpu.a = (emu->cpu.a << 1) | bit;
+		SET_FLAG(0, 0, 0, bit);
+	} break;
+	case 0x17: { // RLA
+		LEN(1); CYCLE(4);
+		uint8_t bit = emu->cpu.a >> 7;
+		emu->cpu.a = (emu->cpu.a << 1) | FLAG_C;
+		SET_FLAG(0, 0, 0, bit);
+	} break;
+	case 0x0F: { // RRCA
+		LEN(1); CYCLE(4);
+		uint8_t bit = emu->cpu.a & 0b1;
+		emu->cpu.a = (emu->cpu.a >> 1) | (bit << 7);
+		SET_FLAG(0, 0, 0, bit);
+	} break;
+	case 0x1F: { // RRA
+		LEN(1); CYCLE(4);
+		uint8_t bit = emu->cpu.a & 0b1;
+		emu->cpu.a = (emu->cpu.a >> 1) | (FLAG_C << 7);
+		SET_FLAG(0, 0, 0, bit);
+	} break;
+
+
+	#define NO_INSTRUCTION LEN(1); CYCLE(4); DEBUG("%02X is an invalid opcode!", opcode); break
+	case 0xD3: NO_INSTRUCTION;
+	case 0xE3: NO_INSTRUCTION;
+	case 0xE4: NO_INSTRUCTION;
+	case 0xF4: NO_INSTRUCTION;
+	case 0xDB: NO_INSTRUCTION;
+	case 0xEB: NO_INSTRUCTION;
+	case 0xEC: NO_INSTRUCTION;
+	case 0xED: NO_INSTRUCTION;
+	case 0xFC: NO_INSTRUCTION;
+	case 0xFD: NO_INSTRUCTION;
+	case 0xDD: NO_INSTRUCTION;
+	
 
 	default:
-		DEBUG("Not implemented opcode %x", opcode);
+		DEBUG("Not implemented opcode %02X", opcode);
 	}
 }
 
+#define HL_OP(METHOD) { \
+	LEN(2); CYCLE(16); \
+	uint8_t value = memory_read(emu, emu->cpu.hl); \
+	METHOD(); \
+	SET_FLAG(result == 0, 0, 0, bit); \
+	memory_write(emu, emu->cpu.hl, result); \
+} break
+#define BIT_OP(TARGET, METHOD) { \
+	LEN(2); CYCLE(8); \
+	uint8_t value = emu->cpu.TARGET; \
+	METHOD() \
+	SET_FLAG(result == 0, 0, 0, bit); \
+	emu->cpu.TARGET = result; \
+} break
+static inline void prefix_opcodes(Emulator* emu) {
+	uint8_t opcode = memory_read(emu, emu->cpu.pc + 1);
+	switch (opcode) {
+	
+	#define do_rlc() \
+		uint8_t bit = value >> 7; \
+		uint8_t result = (value << 1) | bit;
+	#define do_rl() \
+		uint8_t bit = value >> 7; \
+		uint8_t result = (value << 1) | FLAG_C;
+	#define do_rrc() \
+		uint8_t bit = value & 0b1; \
+		uint8_t result = (value >> 1) | (bit << 7);
+	#define do_rr() \
+		uint8_t bit = value & 0b1; \
+		uint8_t result = (value >> 1) | (FLAG_C << 7);
+	
+	#define RLC(TARGET) BIT_OP(TARGET, do_rlc)
+	#define RL(TARGET) BIT_OP(TARGET, do_rl)
+	#define RRC(TARGET) BIT_OP(TARGET, do_rrc)
+	#define RR(TARGET) BIT_OP(TARGET, do_rr)
+
+	case 0x00: RLC(b);
+	case 0x01: RLC(c);
+	case 0x02: RLC(d);
+	case 0x03: RLC(e);
+	case 0x04: RLC(h);
+	case 0x05: RLC(l);
+	case 0x07: RLC(a);
+	case 0x06: HL_OP(do_rlc);
+
+	case 0x08: RRC(b);
+	case 0x09: RRC(c);
+	case 0x0A: RRC(d);
+	case 0x0B: RRC(e);
+	case 0x0C: RRC(h);
+	case 0x0D: RRC(l);
+	case 0x0F: RRC(a);
+	case 0x0E: HL_OP(do_rrc);
+	
+	case 0x10: RL(b);
+	case 0x11: RL(c);
+	case 0x12: RL(d);
+	case 0x13: RL(e);
+	case 0x14: RL(h);
+	case 0x15: RL(l);
+	case 0x17: RL(a);
+	case 0x16: HL_OP(do_rl);
+
+	case 0x18: RR(b);
+	case 0x19: RR(c);
+	case 0x1A: RR(d);
+	case 0x1B: RR(e);
+	case 0x1C: RR(h);
+	case 0x1D: RR(l);
+	case 0x1F: RR(a);
+	case 0x1E: HL_OP(do_rr);
+
+	#define do_sla() \
+		uint8_t bit = value >> 7; \
+		uint8_t result = (value << 1);
+	// Shift n right into carry, MSB does not change
+	#define do_sra() \
+		uint8_t bit = value & 0b1; \
+		uint8_t result = (value >> 1) | (value & 0b10000000);
+	// Shift n right into carry, MSB set to 0
+	#define do_srl() \
+		uint8_t bit = value & 0b1; \
+		uint8_t result = (value >> 1);
+	#define do_swap() \
+		uint8_t bit = 0; \
+		uint8_t result = (value << 4) | (value >> 4);
+	
+	#define SLA(TARGET) BIT_OP(TARGET, do_sla)
+	#define SRA(TARGET) BIT_OP(TARGET, do_sra)
+	#define SRL(TARGET) BIT_OP(TARGET, do_srl)
+	#define SWAP(TARGET) BIT_OP(TARGET, do_swap)
+
+	case 0x20: SLA(b);
+	case 0x21: SLA(c);
+	case 0x22: SLA(d);
+	case 0x23: SLA(e);
+	case 0x24: SLA(h);
+	case 0x25: SLA(l);
+	case 0x27: SLA(a);
+	case 0x26: HL_OP(do_sla);
+	case 0x28: SRA(b);
+	case 0x29: SRA(c);
+	case 0x2A: SRA(d);
+	case 0x2B: SRA(e);
+	case 0x2C: SRA(h);
+	case 0x2D: SRA(l);
+	case 0x2F: SRA(a);
+	case 0x2E: HL_OP(do_sra);
+
+	case 0x30: SWAP(b);
+	case 0x31: SWAP(c);
+	case 0x32: SWAP(d);
+	case 0x33: SWAP(e);
+	case 0x34: SWAP(h);
+	case 0x35: SWAP(l);
+	case 0x37: SWAP(a);
+	case 0x36: HL_OP(do_swap);
+	case 0x38: SRL(b);
+	case 0x39: SRL(c);
+	case 0x3A: SRL(d);
+	case 0x3B: SRL(e);
+	case 0x3C: SRL(h);
+	case 0x3D: SRL(l);
+	case 0x3F: SRL(a);
+	case 0x3E: HL_OP(do_srl);
+	
+
+	#define LINE(START, OFFSET, REG_METHOD, ADDR_METHOD) \
+		case START + 0: REG_METHOD(OFFSET, b); \
+		case START + 1: REG_METHOD(OFFSET, c); \
+		case START + 2: REG_METHOD(OFFSET, d); \
+		case START + 3: REG_METHOD(OFFSET, e); \
+		case START + 4: REG_METHOD(OFFSET, h); \
+		case START + 5: REG_METHOD(OFFSET, l); \
+		case START + 6: ADDR_METHOD(OFFSET); \
+		case START + 7: REG_METHOD(OFFSET, a)
+
+
+	#define BIT(OFFSET, TARGET) { \
+		LEN(2); CYCLE(8); \
+		uint8_t bit = (emu->cpu.TARGET >> OFFSET) & 0b1; \
+		SET_FLAG(!bit, 0, 1, FLAG_C); \
+	} break
+	#define BIT_HL(OFFSET) { \
+		LEN(2); CYCLE(12); \
+		uint8_t bit = (memory_read(emu, emu->cpu.hl) >> OFFSET) & 0b1; \
+		SET_FLAG(!bit, 0, 1, FLAG_C); \
+	} break
+
+	#define BITS(START, OFFSET) LINE(START, OFFSET, BIT, BIT_HL)
+	BITS(0x40, 0);
+	BITS(0x48, 1);
+	BITS(0x50, 2);
+	BITS(0x58, 3);
+	BITS(0x60, 4);
+	BITS(0x68, 5);
+	BITS(0x70, 6);
+	BITS(0x78, 7);
+
+	#define RES(OFFSET, TARGET) \
+		LEN(2); CYCLE(8); \
+		emu->cpu.TARGET &= ~(1 << OFFSET); \
+		break
+	
+	#define RES_HL(OFFSET) { \
+		LEN(2); CYCLE(16); \
+		uint8_t value = memory_read(emu, emu->cpu.hl); \
+		memory_write(emu, emu->cpu.hl, value & ~(1 << OFFSET)); \
+	} break
+
+	#define SET(OFFSET, TARGET) \
+		LEN(2); CYCLE(8); \
+		emu->cpu.TARGET |= (1 << OFFSET); \
+		break
+	
+	#define SET_HL(OFFSET) { \
+		LEN(2); CYCLE(16); \
+		uint8_t value = memory_read(emu, emu->cpu.hl); \
+		memory_write(emu, emu->cpu.hl, value | (1 << OFFSET)); \
+	} break
+	
+	#define RESS(START, OFFSET) LINE(START, OFFSET, RES, RES_HL)
+	#define SETS(START, OFFSET) LINE(START, OFFSET, SET, SET_HL)
+	
+	RESS(0x80, 0);
+	RESS(0x88, 1);
+	RESS(0x90, 2);
+	RESS(0x98, 3);
+	RESS(0xA0, 4);
+	RESS(0xA8, 5);
+	RESS(0xB0, 6);
+	RESS(0xB8, 7);
+
+	SETS(0xC0, 0);
+	SETS(0xC8, 1);
+	SETS(0xD0, 2);
+	SETS(0xD8, 3);
+	SETS(0xE0, 4);
+	SETS(0xE8, 5);
+	SETS(0xF0, 6);
+	SETS(0xF8, 7);
+
+	default:
+		DEBUG("Not implemented prefix opcode %x", opcode);
+	}
+}

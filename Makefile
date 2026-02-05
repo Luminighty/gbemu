@@ -42,4 +42,4 @@ clean:
 	rm -rf ./tests/build ./tests/bin
 
 test:
-	@python3 ./tests/test_runner.py
+	@python3 ./tests/test_runner.py $(ARGS)

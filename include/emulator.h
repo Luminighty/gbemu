@@ -6,7 +6,7 @@
 #include "cartridge.h"
 
 
-typedef struct {
+typedef struct emulator {
 	CPU cpu;
 	Memory *memory;
 	Cartridge *cartridge;

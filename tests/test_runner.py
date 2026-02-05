@@ -1,6 +1,7 @@
 #!/bin/python3
 
 import os
+import sys
 import subprocess
 
 subprocess.run(['make'], check=True, capture_output=True)
@@ -10,6 +11,13 @@ TESTS_FOLDER = "./tests"
 INCLUDES = "./include"
 
 SRC_OBJS = [os.path.join(SRC_OBJS_FOLDER, f) for f in os.listdir(SRC_OBJS_FOLDER) if f != "main.o" ]
+
+formatted = "--no-format" not in sys.argv
+
+
+RED = "\033[1m\033[91m" if formatted else ""
+GREEN = "\033[1m\033[92m" if formatted else ""
+RESET = "\033[0m" if formatted else ""
 
 def execute_test(directory, c_file):
     c_file_path = os.path.join(directory, c_file)
@@ -24,9 +32,9 @@ def execute_test(directory, c_file):
 
     result = subprocess.run([executable], capture_output=True, text=True)
     if result.returncode == 0:
-        print(f"\033[1m\033[92m[PASS]\033[0m {c_file} passed...")
+        print(f"{GREEN}[PASS]{RESET} {c_file} passed...")
     else:
-        print(f"\033[1m\033[91m[FAIL]\033[0m {c_file} failed...")
+        print(f"{RED}[FAIL]{RESET} {c_file} failed...")
         print(f"{result.stderr}")
 
     return result.returncode == 0
