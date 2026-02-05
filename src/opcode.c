@@ -162,7 +162,8 @@ void opcode_execute(Emulator* emu, uint8_t opcode) {
 	case 0x16: LDd8(d);
 	case 0x26: LDd8(h);
 	case 0x36: // LD (HL), d8;
-		LEN(2); CYCLE(12); memory_write(emu, emu->cpu.hl, memory_read(emu, emu->cpu.pc + 1));
+		LEN(2); CYCLE(12);
+		memory_write(emu, emu->cpu.hl, memory_read(emu, emu->cpu.pc + 1));
 		break;
 	case 0x0E: LDd8(c);
 	case 0x1E: LDd8(e);
@@ -281,11 +282,11 @@ void opcode_execute(Emulator* emu, uint8_t opcode) {
 	case 0x83: ADD(e);
 	case 0x84: ADD(h);
 	case 0x85: ADD(l);
-        case 0x86: { // ADD A, (HL)
+	case 0x86: { // ADD A, (HL)
 		LEN(1); CYCLE(8);
 		exec_add(memory_read(emu, emu->cpu.hl));
-        } break;
-        case 0x87: ADD(a);
+	} break;
+	case 0x87: ADD(a);
 
 	case 0x88: ADC(b);
 	case 0x89: ADC(c);
