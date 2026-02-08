@@ -2,7 +2,6 @@
 
 #include <stdint.h>
 #include <string.h>
-#include <threads.h>
 
 #include "opcode.h"
 #include "emulator.h"
@@ -34,8 +33,8 @@ int test_ld() {
 		int opcode = target_opcode[target] + i;
 		opcode_execute(&emu, opcode);
 		
-		assert_eq(*registers[target], value, "%02X", "[OPCODE %x] LD b, %s", opcode, registers_labels[i]);
-		assert_eq(emu.cpu.f, flags_before, "%02X", "[OPCODE %02X] Flags got updated!", opcode);
+		assertm_eq(*registers[target], value, "%02X", "[OPCODE %x] LD b, %s", opcode, registers_labels[i]);
+		assertm_eq(emu.cpu.f, flags_before, "%02X", "[OPCODE %02X] Flags got updated!", opcode);
 	}}
 	return SUCCESS;
 }
@@ -51,7 +50,7 @@ int test_ld() {
 		uint8_t result = emu.cpu.a OPERATOR *registers[i];\
 		int opcode = (OPCODE) + i;\
 		opcode_execute(&emu, opcode);\
-		assert_eq(emu.cpu.a, result, "%02X", "[OPCODE %x] "LABEL" b, %s", opcode, registers_labels[i]);\
+		assertm_eq(emu.cpu.a, result, "%02X", "[OPCODE %x] "LABEL" b, %s", opcode, registers_labels[i]);\
 	}
 int test_arith() {
 	TEST_ARITH(0x80, 0x10, +, "ADD")
@@ -74,32 +73,32 @@ int test_arith_flags() {
 
 	memset(&emu, 0, sizeof(Emulator));
 	opcode_execute(&emu, 0x80);
-	assert_eq(emu.cpu.f, Z, "%02X", "ADD Z invalid flags!");
+	assertm_eq(emu.cpu.f, Z, "%02X", "ADD Z invalid flags!");
 
 	// Full/Half carry
 	emu.cpu.a = 0b10001000;
 	emu.cpu.b = 0b10001000;
 	opcode_execute(&emu, 0x80);
-	assert_eq(emu.cpu.f, H | C, "%02X", "ADC H C invalid flags!");
+	assertm_eq(emu.cpu.f, H | C, "%02X", "ADC H C invalid flags!");
 
 	// Full/Half carry ADC
 	emu.cpu.f = C;
 	emu.cpu.a = 0b10001000;
 	emu.cpu.b = 0b10000111;
 	opcode_execute(&emu, 0x88);
-	assert_eq(emu.cpu.f, H | C, "%02X", "ADC Full/Half carry not set!");
+	assertm_eq(emu.cpu.f, H | C, "%02X", "ADC Full/Half carry not set!");
 
 	// SUB
 	emu.cpu.a = 0b10010000;
 	emu.cpu.b = 0b10010001;
 	opcode_execute(&emu, 0x90);
-	assert_eq(emu.cpu.f, N | H | C, "%02X", "SUB ZNHC invalid flags!");
+	assertm_eq(emu.cpu.f, N | H | C, "%02X", "SUB ZNHC invalid flags!");
 
 	emu.cpu.f = C;
 	emu.cpu.a = 0b10010000;
 	emu.cpu.b = 0b10010000;
 	opcode_execute(&emu, 0x98);
-	assert_eq(emu.cpu.f, N | H | C, "%02X", "SBC ZNHC invalid flags!");
+	assertm_eq(emu.cpu.f, N | H | C, "%02X", "SBC ZNHC invalid flags!");
 
 	return SUCCESS;
 }

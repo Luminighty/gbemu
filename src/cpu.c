@@ -12,7 +12,7 @@ CPU cpu_create() {
 
 int cpu_step(Emulator* emu) {
 	if (emu->cpu.is_halted) {
-		// TODO: Check for wakeup
+	// TODO: Check for wakeup
 		return 4;
 	}
 
@@ -27,8 +27,9 @@ int cpu_step(Emulator* emu) {
 	emu->cpu.pc += emu->cpu.opcode_length;
 
 	if (ime_was_scheduled) {
-		emu->cpu.ime = true;
+		emu->interrupt.ime = true;
 		emu->cpu.ime_scheduled = false;
 	}
 	return emu->cpu.cycles;
 }
+

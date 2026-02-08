@@ -20,7 +20,6 @@ typedef struct {
 	uint8_t opcode_length;
 	uint8_t cycles;
 
-	bool ime;
 	bool ime_scheduled;
 
 	bool is_stopped;
@@ -32,5 +31,6 @@ CPU cpu_create();
 
 struct emulator;
 int cpu_step(struct emulator *emu);
+
 
 #endif // CPU_H

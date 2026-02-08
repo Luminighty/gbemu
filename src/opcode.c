@@ -1,6 +1,7 @@
 #include "opcode.h"
 #include "logger.h"
 #include "memory_map.h"
+#include "timer.h"
 #include <stdint.h>
 
 #define LEN(c) emu->cpu.opcode_length = c
@@ -20,10 +21,17 @@ static inline void prefix_opcodes(Emulator* emu);
 void opcode_execute(Emulator* emu, uint8_t opcode) {
 	switch (opcode) {
 	case 0x00: LEN(1); CYCLE(4); break; // NOP
-	case 0x10: LEN(2); CYCLE(4); emu->cpu.is_stopped = true; break; // STOP
+	case 0x10: // STOP
+		LEN(2); CYCLE(4); 
+		emu->cpu.is_stopped = true; 
+		timer_div_reset(emu);
+	break;
 	// TODO: HALT BUG
-	case 0x76: LEN(1); CYCLE(4); emu->cpu.is_halted = true; break; // HALT
-	case 0xF3: LEN(1); CYCLE(4); emu->cpu.ime = false; break; // DI
+	case 0x76: // HALT
+		LEN(1); CYCLE(4);
+		emu->cpu.is_halted = true;
+	break;
+	case 0xF3: LEN(1); CYCLE(4); emu->interrupt.ime = false; break; // DI
 	case 0xFB: LEN(1); CYCLE(4); emu->cpu.ime_scheduled = true; break; // EI
 	case 0xCB: prefix_opcodes(emu); break;
 
@@ -596,7 +604,7 @@ void opcode_execute(Emulator* emu, uint8_t opcode) {
 	case 0xD9: { // RETI
 		LEN(0); CYCLE(16);
 		do_return();
-		emu->cpu.ime = true;
+		emu->interrupt.ime = true;
 	} break;
 	
 	#define do_jump(target) emu->cpu.pc = (target)

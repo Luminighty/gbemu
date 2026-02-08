@@ -1,6 +1,7 @@
 #include "memory_map.h"
 
 #include "logger.h"
+#include "timer.h"
 
 uint16_t memory_read_16(Emulator *emu, uint16_t address) {
 	return memory_read(emu, address) | memory_read(emu, address + 1) << 8;
@@ -18,6 +19,8 @@ uint8_t memory_read(Emulator *emu, uint16_t address) {
 		return emu->cartridge->content[address];
 
 	// NOTE: VRAM
+	// if (0x8000 <= address && address <= 0x9FFF)
+
 	
 	// NOTE: SWITCH WRAM
 
@@ -35,7 +38,12 @@ uint8_t memory_read(Emulator *emu, uint16_t address) {
 	
 	// NOTE: IO PORTS
 	
-	// NOTE: Empty IO
+	switch (address) {
+	case 0xFF04: return timer_div_read(emu);
+	case 0xFF05: return emu->timer.tima;
+	case 0xFF06: return emu->timer.tma;
+	case 0xFF07: return timer_tac_read(emu);
+	}
 
 	// NOTE: High WRAM
 	if (address >= 0xFF80 && address <= 0xFFFE)
@@ -44,6 +52,7 @@ uint8_t memory_read(Emulator *emu, uint16_t address) {
 	// NOTE: Interrupt Enable
 	if (address == 0xFFFF)
 		return emu->memory->interrupt_enabled;
+
 
 	DEBUG("Reading unmapped address: %x", address);
 
@@ -76,9 +85,13 @@ void memory_write(Emulator *emu, uint16_t address, uint8_t value) {
 	// NOTE: Empty IO
 	
 	// NOTE: IO PORTS
+	switch (address) {
+	case 0xFF04: timer_div_reset(emu); return;
+	case 0xFF05: timer_tima_write(emu, value); return;
+	case 0xFF06: timer_tma_write(emu, value); return;
+	case 0xFF07: timer_tac_write(emu, value); return;
+	}
 	
-	// NOTE: Empty IO
-
 	// NOTE: High WRAM
 	if (address >= 0xFF80 && address <= 0xFFFE) {
 		emu->memory->highram[address - 0xFF80] = value;
@@ -93,3 +106,4 @@ void memory_write(Emulator *emu, uint16_t address, uint8_t value) {
 
 	DEBUG("Writing to unmapped address: [%x] = %x", address, value);
 }
+

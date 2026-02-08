@@ -4,12 +4,23 @@ import os
 import sys
 import subprocess
 
-subprocess.run(['make'], check=True, capture_output=True)
-
 SRC_OBJS_FOLDER = "./build"
 TESTS_FOLDER = "./tests"
 INCLUDES = "./include"
 
+
+def build_project():
+    result = subprocess.run(['make'], capture_output=True, text=True)
+    print(result.stdout)
+    if result.returncode != 0:
+        print(result.stderr)
+        sys.exit(1)
+
+
+if not os.path.exists(SRC_OBJS_FOLDER):
+    os.makedirs(SRC_OBJS_FOLDER)
+
+build_project()
 SRC_OBJS = [os.path.join(SRC_OBJS_FOLDER, f) for f in os.listdir(SRC_OBJS_FOLDER) if f != "main.o" ]
 
 formatted = "--no-format" not in sys.argv
@@ -35,7 +46,7 @@ def execute_test(directory, c_file):
         print(f"{GREEN}[PASS]{RESET} {c_file} passed...")
     else:
         print(f"{RED}[FAIL]{RESET} {c_file} failed...")
-        print(f"{result.stderr}")
+        print(result.stderr)
 
     return result.returncode == 0
 
