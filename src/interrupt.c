@@ -33,13 +33,7 @@ void interrupt_flag_write(Interrupt *interrupt, uint8_t value) {
 
 static inline void interrupt_idle(Interrupt *interrupt);
 static inline void interrupt_pc_set(Emulator *emu);
-static inline void _interrupt_step(Emulator *emu);
 
-void interrupt_step(Emulator *emu, uint16_t m_cycles) {
-	for (uint16_t step = 0; step < m_cycles; step++) {
-		_interrupt_step(emu);
-	}
-}
 
 void interrupt_trigger(struct emulator *emu, InterruptFlag flag) {
 	emu->interrupt.flag |= flag;
@@ -57,7 +51,8 @@ static inline void interrupt_pc_set(Emulator *emu) {
 #define try_trigger_interrupt(FLAG, ADDRESS) \
 	if (to_interrupt & (FLAG)) { \
 		emu->cpu.pc = (ADDRESS); \
-		emu->interrupt.flag &= ~(FLAG) & ~UNUSED_BITS; \
+		emu->interrupt.flag &= ~(FLAG); \
+		emu->interrupt.flag |= UNUSED_BITS; \
 		return; \
 	}
 
@@ -67,7 +62,7 @@ static inline void interrupt_pc_set(Emulator *emu) {
 	try_trigger_interrupt(INTERRUPT_SERIAL, ADDR_SERIAL);
 	try_trigger_interrupt(INTERRUPT_JOYPAD, ADDR_JOYPAD);
 	
-	emu->cpu.pc = 0xFF;
+	emu->cpu.pc = 0x00;
 }
 
 
@@ -82,7 +77,7 @@ static inline void interrupt_idle(Interrupt *interrupt) {
 }
 
 
-static inline void _interrupt_step(Emulator *emu) {
+uint8_t interrupt_step(Emulator *emu) {
 	switch (emu->interrupt.state) {
 	case INTERRUPT_STATE_IDLE:
 		interrupt_idle(&emu->interrupt);
@@ -103,6 +98,16 @@ static inline void _interrupt_step(Emulator *emu) {
 		break;
 	case INTERRUPT_STATE_PC_SET:
 		interrupt_pc_set(emu);
+		emu->interrupt.state = INTERRUPT_STATE_IDLE;
 		break;
 	}
+	return 4;
+}
+
+uint8_t interrupt_pending(struct emulator *emu) {
+	return emu->interrupt.flag & emu->interrupt.enable;
+}
+
+bool is_interrupt_handler_running(struct emulator *emu) {
+	return emu->interrupt.state != INTERRUPT_STATE_IDLE;
 }

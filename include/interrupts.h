@@ -7,13 +7,13 @@
 
 typedef enum {
 	INTERRUPT_STATE_IDLE,
-
 	INTERRUPT_STATE_NOP0,
 	INTERRUPT_STATE_NOP1,
 	INTERRUPT_STATE_PC_STORE0,
 	INTERRUPT_STATE_PC_STORE1,
 	INTERRUPT_STATE_PC_SET,
 } InterruptState;
+
 
 typedef enum {
 	INTERRUPT_VBLANK = 0b00001,
@@ -22,6 +22,7 @@ typedef enum {
 	INTERRUPT_SERIAL = 0b01000,
 	INTERRUPT_JOYPAD = 0b10000,
 } InterruptFlag;
+
 
 typedef struct {
 	bool ime;
@@ -43,8 +44,10 @@ uint8_t interrupt_flag_read(Interrupt *interrupt);
 
 struct emulator;
 
-void interrupt_step(struct emulator *emu, uint16_t m_cycles);
+uint8_t interrupt_step(struct emulator *emu);
 void interrupt_trigger(struct emulator *emu, InterruptFlag flag);
+uint8_t interrupt_pending(struct emulator *emu);
+bool is_interrupt_handler_running(struct emulator *emu);
 
 
 #endif // INTERRUPT_H

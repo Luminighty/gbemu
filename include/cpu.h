@@ -24,13 +24,14 @@ typedef struct {
 
 	bool is_stopped;
 	bool is_halted;
+	bool is_halt_bugged;
 } CPU;
 
 
 CPU cpu_create();
 
 struct emulator;
-int cpu_step(struct emulator *emu);
+uint8_t cpu_step(struct emulator *emu);
 
 
 #endif // CPU_H

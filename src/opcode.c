@@ -1,8 +1,10 @@
 #include "opcode.h"
+#include "interrupts.h"
 #include "logger.h"
 #include "memory_map.h"
 #include "timer.h"
 #include <stdint.h>
+#include <stdio.h>
 
 #define LEN(c) emu->cpu.opcode_length = c
 #define CYCLE(c) emu->cpu.cycles = c
@@ -26,10 +28,13 @@ void opcode_execute(Emulator* emu, uint8_t opcode) {
 		emu->cpu.is_stopped = true; 
 		timer_div_reset(emu);
 	break;
-	// TODO: HALT BUG
 	case 0x76: // HALT
 		LEN(1); CYCLE(4);
-		emu->cpu.is_halted = true;
+		if (!emu->interrupt.ime && interrupt_pending(emu) != 0) {
+			emu->cpu.is_halt_bugged = true;
+		} else {
+			emu->cpu.is_halted = true;
+		}
 	break;
 	case 0xF3: LEN(1); CYCLE(4); emu->interrupt.ime = false; break; // DI
 	case 0xFB: LEN(1); CYCLE(4); emu->cpu.ime_scheduled = true; break; // EI
@@ -425,7 +430,8 @@ void opcode_execute(Emulator* emu, uint8_t opcode) {
 	case 0xBF: CP(a);
 	
 	case 0xC6: { // ADD A, d8
-		LEN(2); CYCLE(8); exec_add(memory_read(emu, emu->cpu.pc + 1)); 
+		LEN(2); CYCLE(8);
+		exec_add(memory_read(emu, emu->cpu.pc + 1)); 
 	} break;
 	case 0xD6: { // SUB A, d8
 		LEN(2); CYCLE(8); exec_sub(memory_read(emu, emu->cpu.pc + 1));

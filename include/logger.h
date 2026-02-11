@@ -1,8 +1,12 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
+// #define DEBUG_ENABLED 1
+
+#include <stdio.h>
+
 #ifdef DEBUG_ENABLED
-	#define DEBUG(message, ...) printf("[DEBUG] " message, __VA_ARGS__)
+	#define DEBUG(message, ...) printf("[DEBUG] " message, ##__VA_ARGS__)
 #else
 	#define DEBUG(message, ...)
 #endif

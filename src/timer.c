@@ -1,12 +1,14 @@
 #include "timer.h"
 #include "emulator.h"
 #include "interrupts.h"
+#include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 
 static inline void tima_step(Emulator* emu);
 
-void timer_step(Emulator* emu, uint16_t m_cycles) {
-	for (uint16_t t_cycle = 0; t_cycle < m_cycles * 4; t_cycle++) {
+void timer_step(Emulator* emu, uint16_t t_cycles) {
+	for (uint16_t t_cycle = 0; t_cycle < t_cycles; t_cycle++) {
 		emu->timer.internal_timer++;
 		tima_step(emu);
 	}
@@ -20,29 +22,38 @@ static const uint16_t TAC_BITS[] = {
 	[0b11] = 0b0010000000,
 };
 
-#define clock_select(tac) ((tac) & 0b11)
-static inline void tima_step(Emulator* emu) {
+static inline bool should_time_step(Emulator* emu) {
 	Timer *timer = &emu->timer;
 
 	bool is_tima_enabled = timer->tac_enabled;
 	uint16_t selected_bit = TAC_BITS[timer->tac_clock_select];
 
 	bool was_bit_set = timer->tac_selected_bit_state;
-	bool is_bit_set = timer->internal_timer & selected_bit;
+	bool is_bit_set = (timer->internal_timer & selected_bit) != 0;
 
 	// NOTE: On DMG, the enabled flag is before the falling edge detector
 	//  Therefore we need to apply it before detecting the falling edge
 	if (!timer->is_cgb)
 		is_bit_set = is_bit_set && is_tima_enabled;
+
 	timer->tac_selected_bit_state = is_bit_set;
 
 	bool is_falling_edge = was_bit_set && !is_bit_set;
+	if (timer->debug)
+		printf("was: %d is: %d falling: %d\n", was_bit_set, is_bit_set, is_falling_edge);
 	if (!is_falling_edge)
-		return;
+		return false;
 
 	// NOTE: On CGB, the enabled flag is checked after the falling edge detector
 	if (timer->is_cgb && !is_tima_enabled)
-		return;
+		return false;
+
+	return true;
+}
+
+#define clock_select(tac) ((tac) & 0b11)
+static inline void tima_step(Emulator* emu) {
+	Timer *timer = &emu->timer;
 
 	switch (timer->tima_state) {
 	case TIMA_STATE_JUST_OVERFLOWED:
@@ -56,6 +67,8 @@ static inline void tima_step(Emulator* emu) {
 		break;
 	case TIMA_STATE_COUNTING:
 	default:
+		if (!should_time_step(emu))
+			return;
 		if (timer->tima == 0xFF) {
 			timer->tima_state = TIMA_STATE_WILL_OVERFLOW;
 		} else {

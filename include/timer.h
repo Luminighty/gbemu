@@ -25,6 +25,7 @@ typedef struct {
 
 	// NOTE: Used for timer quirks
 	bool is_cgb;
+	bool debug;
 } Timer;
 
 

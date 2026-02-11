@@ -46,7 +46,10 @@ def execute_test(directory, c_file):
         print(f"{GREEN}[PASS]{RESET} {c_file} passed...")
     else:
         print(f"{RED}[FAIL]{RESET} {c_file} failed...")
-        print(result.stderr)
+        if len(result.stdout):
+            print(result.stdout)
+        if len(result.stderr):
+            print(result.stderr)
 
     return result.returncode == 0
 

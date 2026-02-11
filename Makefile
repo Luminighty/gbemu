@@ -20,7 +20,7 @@ OBJS=$(patsubst src/%.c, build/%.o, $(SRCS))
 
 .PHONY: debug release clean
 
-debug: CFLAGS += -g -O0 -Wall -Wextra -DDEV_MODE
+debug: CFLAGS += -g -O0 -Wall -Wextra -DDEV_MODE -fsanitize=address
 debug: $(TARGET)
 
 release: CFLAGS += -O2 -DNDEBUG
