@@ -4,6 +4,7 @@
 #include "cpu.h"
 #include "display.h"
 #include "interrupts.h"
+#include "joypad.h"
 #include "memory.h"
 #include "cartridge.h"
 #include "ppu.h"
@@ -18,6 +19,7 @@ typedef struct emulator {
 	Interrupt interrupt;
 	Display display;
 	PPU ppu;
+	Joypad joypad;
 } Emulator;
 
 

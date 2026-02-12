@@ -1,7 +1,9 @@
 #include "memory_map.h"
 
 #include "interrupts.h"
+#include "joypad.h"
 #include "logger.h"
+#include "ppu.h"
 #include "timer.h"
 
 uint16_t memory_read_16(Emulator *emu, uint16_t address) {
@@ -15,15 +17,13 @@ void memory_write_16(Emulator *emu, uint16_t address, uint16_t value) {
 
 
 uint8_t memory_read(Emulator *emu, uint16_t address) {
-	// DEBUG("READ %04X\n", address);
 	// TODO: Will require a mapper!
 	if (address <= 0x7FFF)
 		return emu->cartridge->content[address];
 
 	// NOTE: VRAM
 	if (0x8000 <= address && address <= 0x9FFF)
-		return emu->memory->temp_vram[address - 0x8000];
-
+		return ppu_vram_read(&emu->ppu, address - 0x8000);
 	
 	// NOTE: SWITCH WRAM
 
@@ -42,14 +42,17 @@ uint8_t memory_read(Emulator *emu, uint16_t address) {
 	// NOTE: IO PORTS
 	
 	switch (address) {
+	case 0xFF00: return joypad_read(&emu->joypad);
 	// NOTE: Timers
 	case 0xFF04: return timer_div_read(emu);
 	case 0xFF05: return emu->timer.tima;
 	case 0xFF06: return emu->timer.tma;
 	case 0xFF07: return timer_tac_read(emu);
-	// NOTE: PPU
+	// NOTE: PPU Registers
+	case 0xFF40: return ppu_lcdc_read(&emu->ppu);
+	case 0xFF42: return emu->ppu.scy;
+	case 0xFF43: return emu->ppu.scx;
 	case 0xFF44: return emu->ppu.line;
-	case 0xFF40: return emu->ppu.lcdc;
 	case 0xFF41: return emu->ppu.stat;
 	case 0xFF47: return emu->ppu.bgp;
 	// NOTE: Interrupts
@@ -75,11 +78,8 @@ void memory_write(Emulator *emu, uint16_t address, uint8_t value) {
 	}
 
 	// NOTE: VRAM
-	if (0x8000 <= address && address <= 0x9FFF) {
-		// printf("[VRAM WRITE] %04X = %02X\n", address, value);
-		emu->memory->temp_vram[address - 0x8000] = value;
-		return;
-	}
+	if (0x8000 <= address && address <= 0x9FFF)
+		return ppu_vram_write(&emu->ppu, address - 0x8000, value);
 	
 	// NOTE: SWITCH WRAM
 
@@ -99,14 +99,16 @@ void memory_write(Emulator *emu, uint16_t address, uint8_t value) {
 	
 	// NOTE: IO PORTS
 	switch (address) {
+	case 0xFF00: joypad_write(&emu->joypad, value); return;
 	case 0xFF04: timer_div_reset(emu); return;
 	case 0xFF05: timer_tima_write(emu, value); return;
 	case 0xFF06: timer_tma_write(emu, value); return;
 	case 0xFF07: timer_tac_write(emu, value); return;
 	// NOTE: PPU
-	// TODO: Update these
+	case 0xFF40: return ppu_lcdc_write(&emu->ppu, value);
+	case 0xFF42: emu->ppu.scy = value; return;
+	case 0xFF43: emu->ppu.scx = value; return;
 	case 0xFF44: emu->ppu.line = value; return;
-	case 0xFF40: emu->ppu.lcdc = value; return;
 	case 0xFF41: emu->ppu.stat = value; return;
 	case 0xFF47: emu->ppu.bgp = value; return;
 	// NOTE: Interrupts

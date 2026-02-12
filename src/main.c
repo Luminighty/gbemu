@@ -5,6 +5,7 @@
 #include "cartridge.h"
 #include "display.h"
 #include "emulator.h"
+#include "joypad.h"
 #include "memory_map.h"
 
 char* gb_file = "./assets/tetris.gb";
@@ -30,6 +31,25 @@ void draw_display_to_image(Emulator *emu, Image *image) {
 	}}
 }
 
+static inline void update_inputs(Emulator *emu) {
+	struct {int key; JoypadButton gb;} keys[] = {
+		{.key = KEY_DOWN, .gb = GB_BUTTON_DOWN},
+		{.key = KEY_UP, .gb = GB_BUTTON_UP},
+		{.key = KEY_LEFT, .gb = GB_BUTTON_LEFT},
+		{.key = KEY_RIGHT, .gb = GB_BUTTON_RIGHT},
+		{.key = KEY_X, .gb = GB_BUTTON_A},
+		{.key = KEY_C, .gb = GB_BUTTON_B},
+		{.key = KEY_SPACE, .gb = GB_BUTTON_SELECT},
+		{.key = KEY_ENTER, .gb = GB_BUTTON_START},
+	};
+	for(int i = 0; i < 8; i++) {
+		if (IsKeyReleased(keys[i].key))
+			joypad_release(emu, keys[i].gb);
+		if (IsKeyPressed(keys[i].key))
+			joypad_press(emu, keys[i].gb);
+	}
+}
+
 int main(void) {
 	Cartridge cart = cartridge_load(gb_file);
 	cartridge_dump_header(&cart);
@@ -46,6 +66,8 @@ int main(void) {
 	emu.cartridge = &cart;
 
 	while(!WindowShouldClose()) {
+		update_inputs(&emu);
+
 		emulator_run_frame(&emu);
 
 		draw_display_to_image(&emu, &screen);
