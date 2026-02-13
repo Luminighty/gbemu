@@ -36,6 +36,8 @@ uint8_t memory_read(Emulator *emu, uint16_t address) {
 		return memory_read(emu, address - 0x2000);
 	
 	// NOTE: OAM
+	if (address >= 0xFE00 && address <= 0xFE9F)
+		return ppu_oam_read(&emu->ppu, address - 0xFE00);
 	
 	// NOTE: Empty IO
 	
@@ -50,10 +52,11 @@ uint8_t memory_read(Emulator *emu, uint16_t address) {
 	case 0xFF07: return timer_tac_read(emu);
 	// NOTE: PPU Registers
 	case 0xFF40: return ppu_lcdc_read(&emu->ppu);
+	case 0xFF41: return emu->ppu.stat;
 	case 0xFF42: return emu->ppu.scy;
 	case 0xFF43: return emu->ppu.scx;
 	case 0xFF44: return emu->ppu.line;
-	case 0xFF41: return emu->ppu.stat;
+	case 0xFF46: return 0xFF; // NOTE: OAM DMA
 	case 0xFF47: return emu->ppu.bgp;
 	// NOTE: Interrupts
 	case 0xFF0F: return interrupt_flag_read(&emu->interrupt);
@@ -94,6 +97,8 @@ void memory_write(Emulator *emu, uint16_t address, uint8_t value) {
 		return memory_write(emu, address - 0x2000, value);
 	
 	// NOTE: OAM
+	if (address >= 0xFE00 && address <= 0xFE9F)
+		return ppu_oam_write(&emu->ppu, address - 0xFE00, value);
 	
 	// NOTE: Empty IO
 	
@@ -106,10 +111,11 @@ void memory_write(Emulator *emu, uint16_t address, uint8_t value) {
 	case 0xFF07: timer_tac_write(emu, value); return;
 	// NOTE: PPU
 	case 0xFF40: return ppu_lcdc_write(&emu->ppu, value);
+	case 0xFF41: emu->ppu.stat = value; return;
 	case 0xFF42: emu->ppu.scy = value; return;
 	case 0xFF43: emu->ppu.scx = value; return;
 	case 0xFF44: emu->ppu.line = value; return;
-	case 0xFF41: emu->ppu.stat = value; return;
+	case 0xFF46: ppu_oam_dma_write(emu, value);
 	case 0xFF47: emu->ppu.bgp = value; return;
 	// NOTE: Interrupts
 	case 0xFF0F: interrupt_flag_write(&emu->interrupt, value); return;

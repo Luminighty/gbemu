@@ -19,10 +19,10 @@ char* gb_file = "./assets/tetris.gb";
 void draw_display_to_image(Emulator *emu, Image *image) {
 	// static Color raylib_palette[] = { WHITE, LIGHTGRAY, GRAY, BLACK };
 	Color palette[4] = {
-		{155, 188, 15, 255}, // #9BBC0F
-		{139, 172, 15, 255}, // #8BAC0F
-		{48, 98, 48, 255},   // #306230
-		{15, 56, 15, 255}    // #0F380F
+		WHITE,
+		LIGHTGRAY,
+		GRAY,
+		BLACK
 	    };
 	for (int y = 0; y < DISPLAY_HEIGHT; y++){
 	for (int x = 0; x < DISPLAY_WIDTH; x++) {
